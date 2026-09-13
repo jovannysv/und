@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Public: anyone can read businesses that have been verified.
+    // Nobody writes from the client - Liz/the team add data via
+    // the console or an admin import script, which bypasses rules.
+    match /businesses/{id} {
+      allow read: if resource.data.isVerified == true;
+      allow write: if false;
+    }
+
+    match /events/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // A user can read/write only their own profile document.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /users/{uid}/favorites/{businessId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
