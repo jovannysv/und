@@ -1,24 +1,23 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import logo from './assets/logo.png'
+import { ref } from 'vue'
+import SplashPage from './components/SplashPage.vue'
+import TrendingResults from './components/TrendingResults.vue'
+
+const entered = ref(false)
 </script>
 
 <template>
-  <header class="site-header">
-    <img :src="logo" alt="Up'n'Down Chucktown" class="site-logo" />
-  </header>
-  <HelloWorld />
+  <SplashPage v-if="!entered" @enter="entered = true" />
+  <TrendingResults v-else />
 </template>
 
-<style scoped>
-.site-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 24px;
-}
 
-.site-logo {
-  height: 40px;
-  width: auto;
+<style>
+/* Global styles (omit 'scoped' so it applies to the whole page) */
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  background-color: #F2F0EF; /* main website color */
+  color: #000000;             /* my primary text color */
 }
 </style>
