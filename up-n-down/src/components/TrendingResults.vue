@@ -1,10 +1,51 @@
 <script setup lang="ts">
-import { boostOfTheDay, trendingBusinesses } from '../data/mockBusinesses'
+import { onMounted, ref } from 'vue'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { db } from '../firebase'
+import type { Business } from '../types'
+import { boostOfTheDay, type TrendingBusiness } from '../data/mockBusinesses'
 import logo from '../assets/logo.png'
 import ListingCard from './ListingCard.vue'
 
 const categories = ['Food', 'Shops', 'Historic Sites', 'Parks', 'Venues', 'More']
 const filters = ['Price', 'Cuisine', 'Distance', 'Rating', 'Open now', 'Outdoor seating']
+
+const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+
+// Hours are stored as "11am-9pm"; the card only shows the closing time.
+function closingTime(hours: string | undefined): string {
+  if (!hours || hours.toLowerCase() === 'closed') return 'closed today'
+  return hours.split('-')[1]?.trim() ?? hours
+}
+
+const trendingBusinesses = ref<TrendingBusiness[]>([])
+const loading = ref(true)
+const loadError = ref('')
+
+onMounted(async () => {
+  try {
+    // Only verified businesses - matches the public read rule in firestore.rules
+    const snap = await getDocs(query(collection(db, 'businesses'), where('isVerified', '==', true)))
+    const today = DAYS[new Date().getDay()]
+
+    trendingBusinesses.value = snap.docs.map((doc) => {
+      const data = doc.data() as Omit<Business, 'id'>
+      return {
+        id: doc.id,
+        name: data.name,
+        description: data.description,
+        location: data.address,
+        openUntil: closingTime(data.hours?.[today]),
+        tags: data.tags,
+      }
+    })
+  } catch (err) {
+    loadError.value = 'Could not load businesses right now.'
+    console.error('Failed to load businesses:', err)
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
@@ -66,6 +107,9 @@ const filters = ['Price', 'Cuisine', 'Distance', 'Rating', 'Open now', 'Outdoor 
 
         <h2 class="section-heading">People in Charleston have been loving these!</h2>
         <p class="section-subtitle">Based on recent visits and reviews</p>
+        <p v-if="loading" class="section-subtitle">Loading businesses…</p>
+        <p v-else-if="loadError" class="section-subtitle">{{ loadError }}</p>
+        <p v-else-if="trendingBusinesses.length === 0" class="section-subtitle">No businesses listed yet.</p>
         <ListingCard v-for="business in trendingBusinesses" :key="business.id" :business="business" />
       </main>
 
