@@ -37,6 +37,7 @@ onMounted(async () => {
         location: data.address,
         openUntil: closingTime(data.hours?.[today]),
         tags: data.tags,
+        imageUrl: data.imageUrl,
       }
     })
   } catch (err) {

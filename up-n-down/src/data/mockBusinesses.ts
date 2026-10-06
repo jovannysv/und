@@ -5,6 +5,7 @@ export interface TrendingBusiness {
   location: string
   openUntil: string
   tags: string[]
+  imageUrl?: string
   isAd?: boolean
 }
 

@@ -7,7 +7,8 @@ defineProps<{ business: TrendingBusiness }>()
 <template>
   <article class="listing">
     <div class="listing-image">
-      <svg width="40" height="40" viewBox="0 0 61 61" fill="none" stroke="currentColor" stroke-width="4.36" aria-hidden="true">
+      <img v-if="business.imageUrl" class="listing-photo" :src="business.imageUrl" :alt="business.name" />
+      <svg v-else width="40" height="40" viewBox="0 0 61 61" fill="none" stroke="currentColor" stroke-width="4.36" aria-hidden="true">
         <path d="M30.38 51.26c11.53 0 20.88-9.35 20.88-20.88S41.91 9.5 30.38 9.5 9.5 18.85 9.5 30.38s9.35 20.88 20.88 20.88Z" />
         <path d="M30.38 43.67c7.34 0 13.29-5.95 13.29-13.29s-5.95-13.29-13.29-13.29-13.29 5.95-13.29 13.29 5.95 13.29 13.29 13.29Z" />
         <path d="M5.7 11.39v15.19c0 .76.3 1.48.83 2.02.54.53 1.26.83 2.02.83v19.94M11.39 11.39v15.19M55.06 11.39c-3.8 2.85-5.7 8.55-5.7 15.19h5.7v22.78" />
@@ -73,6 +74,15 @@ defineProps<{ business: TrendingBusiness }>()
 
 .listing-image > svg {
   opacity: 0.85;
+}
+
+.listing-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .next-photo {
