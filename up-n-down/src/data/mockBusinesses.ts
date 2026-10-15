@@ -6,6 +6,10 @@ export interface TrendingBusiness {
   openUntil: string
   tags: string[]
   imageUrl?: string
+  lat?: number
+  lng?: number
+  hours?: Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', string>
+  isLocallyOwned?: boolean
   isAd?: boolean
 }
 

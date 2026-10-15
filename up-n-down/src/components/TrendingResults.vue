@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Business } from '../types'
-import { boostOfTheDay, type TrendingBusiness } from '../data/mockBusinesses'
-import logo from '../assets/logo.png'
+import type { TrendingBusiness } from '../data/mockBusinesses'
 import ListingCard from './ListingCard.vue'
+import BusinessMap from './BusinessMap.vue'
+import SiteHeader from './SiteHeader.vue'
 
-const categories = ['Food', 'Shops', 'Historic Sites', 'Parks', 'Venues', 'More']
+defineEmits<{ select: [business: TrendingBusiness] }>()
+
 const filters = ['Price', 'Cuisine', 'Distance', 'Rating', 'Open now', 'Outdoor seating']
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
@@ -21,6 +23,24 @@ function closingTime(hours: string | undefined): string {
 const trendingBusinesses = ref<TrendingBusiness[]>([])
 const loading = ref(true)
 const loadError = ref('')
+
+// Seeded by today's date rather than Math.random(), so every visitor sees the
+// same pick all day and it doesn't change on reload. Rolls over at midnight.
+function dailyIndex(length: number): number {
+  const dateKey = new Date().toDateString()
+  let hash = 0
+  for (const char of dateKey) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return hash % length
+}
+
+const boostOfTheDay = computed<TrendingBusiness | null>(() => {
+  const pool = trendingBusinesses.value
+  if (pool.length === 0) return null
+  return { ...pool[dailyIndex(pool.length)], isAd: true }
+})
+
+// The map highlights the last hovered listing and stays there on mouse-out.
+const activeBusinessId = ref<string | null>(null)
 
 onMounted(async () => {
   try {
@@ -38,6 +58,10 @@ onMounted(async () => {
         openUntil: closingTime(data.hours?.[today]),
         tags: data.tags,
         imageUrl: data.imageUrl,
+        lat: data.lat,
+        lng: data.lng,
+        hours: data.hours,
+        isLocallyOwned: data.isLocallyOwned,
       }
     })
   } catch (err) {
@@ -51,36 +75,7 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <header class="header">
-      <div class="header-top">
-        <a href="/" class="logo">
-          <img :src="logo" alt="Up'n Down Chucktown" />
-        </a>
-
-        <form class="search" role="search" @submit.prevent>
-          <input class="search-input" type="search" placeholder="Search" aria-label="Search" />
-          <button type="submit" class="search-button" aria-label="Search">
-            <svg width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.17" stroke-linecap="round" aria-hidden="true">
-              <path d="M11.92 19.5a7.58 7.58 0 1 0 0-15.17 7.58 7.58 0 0 0 0 15.17ZM21.67 21.67l-3.8-3.8" />
-            </svg>
-          </button>
-        </form>
-
-        <div class="auth-actions">
-          <button type="button" class="btn btn-login">Login</button>
-          <button type="button" class="btn btn-register">Register</button>
-        </div>
-      </div>
-
-      <nav class="nav-categories" aria-label="Categories">
-        <button v-for="category in categories" :key="category" type="button" class="nav-item">
-          {{ category }}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-            <path d="m2.63 5.25 4.37 4.38 4.38-4.38" />
-          </svg>
-        </button>
-      </nav>
-    </header>
+    <SiteHeader />
 
     <div class="layout">
       <main class="main">
@@ -104,25 +99,34 @@ onMounted(async () => {
           Boost of the Day!
           <span class="info-badge" title="Sponsored placement">i</span>
         </h2>
-        <ListingCard :business="boostOfTheDay" />
+        <p v-if="!boostOfTheDay" class="section-subtitle">{{ loading ? 'Loading…' : 'No boost today.' }}</p>
+        <ListingCard
+          v-else
+          :business="boostOfTheDay"
+          class="clickable"
+          @click="$emit('select', boostOfTheDay)"
+          @mouseenter="activeBusinessId = boostOfTheDay.id"
+          @focusin="activeBusinessId = boostOfTheDay.id"
+        />
 
         <h2 class="section-heading">People in Charleston have been loving these!</h2>
         <p class="section-subtitle">Based on recent visits and reviews</p>
         <p v-if="loading" class="section-subtitle">Loading businesses…</p>
         <p v-else-if="loadError" class="section-subtitle">{{ loadError }}</p>
         <p v-else-if="trendingBusinesses.length === 0" class="section-subtitle">No businesses listed yet.</p>
-        <ListingCard v-for="business in trendingBusinesses" :key="business.id" :business="business" />
+        <ListingCard
+          v-for="business in trendingBusinesses"
+          :key="business.id"
+          :business="business"
+          class="clickable"
+          @click="$emit('select', business)"
+          @mouseenter="activeBusinessId = business.id"
+          @focusin="activeBusinessId = business.id"
+        />
       </main>
 
       <aside class="map" aria-label="Map">
-        <iframe
-          class="map-frame"
-          title="Map of Charleston, SC"
-          src="https://www.google.com/maps?q=Charleston,+SC&z=13&output=embed"
-          loading="lazy"
-          referrerpolicy="no-referrer-when-downgrade"
-          allowfullscreen
-        ></iframe>
+        <BusinessMap :businesses="trendingBusinesses" :active-id="activeBusinessId" />
       </aside>
     </div>
   </div>
@@ -136,114 +140,7 @@ onMounted(async () => {
   color: var(--ink);
 }
 
-/* ---------- Header ---------- */
-.header {
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.header-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px 24px;
-  padding: 12px 24px 4px;
-}
-
-/* logo.png has a lot of empty margin, so crop it to the lettering */
-.logo {
-  display: block;
-  width: 108px;
-  height: 56px;
-  overflow: hidden;
-}
-
-.logo img {
-  display: block;
-  width: 190px;
-  max-width: none;
-  margin: -17px 0 0 -41px;
-}
-
-.search {
-  display: flex;
-  flex: 0 1 320px;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-}
-
-.search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 14px 20px;
-  border: none;
-  outline: none;
-  background: transparent;
-  font: inherit;
-  font-size: 18px;
-  color: var(--ink);
-}
-
-.search-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  border: none;
-  background: var(--teal);
-  color: #fff;
-  cursor: pointer;
-}
-
-.auth-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.btn {
-  padding: 9px 18px;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-login {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.btn-register {
-  border: 1px solid var(--teal);
-  background: var(--teal);
-  color: #fff;
-}
-
-.nav-categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 24px;
-  padding: 4px 24px 12px;
-}
-
-.nav-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ink);
+.clickable {
   cursor: pointer;
 }
 
@@ -269,13 +166,8 @@ onMounted(async () => {
   height: 100vh;
   border-left: 1px solid var(--line);
   background: #eef0f3;
-}
-
-.map-frame {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
+  /* Leaflet panes use z-indexes up to 1000; keep them inside the map */
+  isolation: isolate;
 }
 
 /* ---------- Page heading + filters ---------- */
@@ -382,11 +274,6 @@ onMounted(async () => {
     height: 320px;
     border-top: 1px solid var(--line);
     border-left: none;
-  }
-
-  .search {
-    order: 3;
-    flex-basis: 100%;
   }
 }
 </style>
