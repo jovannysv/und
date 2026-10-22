@@ -1,7 +1,10 @@
+import type { Category } from '../types'
+
 export interface TrendingBusiness {
   id: string
   name: string
   description: string
+  category?: Category
   location: string
   openUntil: string
   tags: string[]

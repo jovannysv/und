@@ -11,11 +11,16 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AuthDialog: typeof import('./src/components/AuthDialog.vue')['default']
     BusinessMap: typeof import('./src/components/BusinessMap.vue')['default']
     Button: typeof import('primevue/button')['default']
+    Dialog: typeof import('primevue/dialog')['default']
+    FavoritesPage: typeof import('./src/components/FavoritesPage.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
+    InputText: typeof import('primevue/inputtext')['default']
     ListingCard: typeof import('./src/components/ListingCard.vue')['default']
     ListingDetail: typeof import('./src/components/ListingDetail.vue')['default']
+    Message: typeof import('primevue/message')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SiteHeader: typeof import('./src/components/SiteHeader.vue')['default']

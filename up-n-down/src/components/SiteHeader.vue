@@ -1,18 +1,24 @@
 <script setup lang="ts">
 import logo from '../assets/logo.png'
+import { authPrompt, logout, openAuth, session } from '../session'
+import { CATEGORIES, clearSearch, nav, showFavorites, showResults, toggleCategory } from '../navigation'
+import AuthDialog from './AuthDialog.vue'
 
-const categories = ['Food', 'Shops', 'Historic Sites', 'Parks', 'Venues', 'More']
+function goHome() {
+  clearSearch()
+  showResults()
+}
 </script>
 
 <template>
   <header class="header">
     <div class="header-top">
-      <a href="/" class="logo">
+      <a href="/" class="logo" @click.prevent="goHome">
         <img :src="logo" alt="Up'n Down Chucktown" />
       </a>
 
-      <form class="search" role="search" @submit.prevent>
-        <input class="search-input" type="search" placeholder="Search" aria-label="Search" />
+      <form class="search" role="search" @submit.prevent="showResults">
+        <input v-model="nav.keyword" class="search-input" type="search" placeholder="Search" aria-label="Search" />
         <button type="submit" class="search-button" aria-label="Search">
           <svg width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.17" stroke-linecap="round" aria-hidden="true">
             <path d="M11.92 19.5a7.58 7.58 0 1 0 0-15.17 7.58 7.58 0 0 0 0 15.17ZM21.67 21.67l-3.8-3.8" />
@@ -20,18 +26,31 @@ const categories = ['Food', 'Shops', 'Historic Sites', 'Parks', 'Venues', 'More'
         </button>
       </form>
 
-      <div class="auth-actions">
-        <button type="button" class="btn btn-login">Login</button>
-        <button type="button" class="btn btn-register">Register</button>
+      <div v-if="session.user" class="auth-actions">
+        <span class="greeting">Hi, {{ session.user.displayName }}</span>
+        <button type="button" class="btn btn-login" @click="showFavorites">
+          <i class="pi pi-heart" aria-hidden="true"></i> Favorites
+        </button>
+        <button type="button" class="btn btn-login" @click="logout">Log out</button>
       </div>
+      <div v-else-if="session.ready" class="auth-actions">
+        <button type="button" class="btn btn-login" @click="openAuth('login')">Login</button>
+        <button type="button" class="btn btn-register" @click="openAuth('register')">Register</button>
+      </div>
+      <AuthDialog v-model:visible="authPrompt.open" v-model:mode="authPrompt.mode" />
     </div>
 
     <nav class="nav-categories" aria-label="Categories">
-      <button v-for="category in categories" :key="category" type="button" class="nav-item">
-        {{ category }}
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-          <path d="m2.63 5.25 4.37 4.38 4.38-4.38" />
-        </svg>
+      <button
+        v-for="category in CATEGORIES"
+        :key="category.value"
+        type="button"
+        class="nav-item"
+        :class="{ active: nav.category === category.value }"
+        :aria-pressed="nav.category === category.value"
+        @click="toggleCategory(category.value)"
+      >
+        {{ category.label }}
       </button>
     </nav>
   </header>
@@ -102,8 +121,14 @@ const categories = ['Food', 'Shops', 'Historic Sites', 'Parks', 'Venues', 'More'
 
 .auth-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+.greeting {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
 }
 
 .btn {
@@ -146,6 +171,11 @@ const categories = ['Food', 'Shops', 'Historic Sites', 'Parks', 'Venues', 'More'
   font-weight: 500;
   color: var(--ink);
   cursor: pointer;
+}
+
+.nav-item.active {
+  color: var(--teal);
+  box-shadow: inset 0 -2px 0 var(--teal);
 }
 
 @media (max-width: 960px) {

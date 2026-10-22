@@ -1,11 +1,34 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import type { TrendingBusiness } from '../data/mockBusinesses'
+import { addFavorite, isFavorite, removeFavorite } from '../favorites'
+import { nav } from '../navigation'
+import { openAuth, session } from '../session'
 import SiteHeader from './SiteHeader.vue'
 import BusinessMap from './BusinessMap.vue'
 
 const props = defineProps<{ business: TrendingBusiness }>()
 defineEmits<{ back: [] }>()
+
+const saved = computed(() => isFavorite(props.business.id))
+
+// Guests are asked to log in first; they click Save again afterwards (UC-02 A3)
+async function toggleSaved() {
+  if (!session.user) {
+    openAuth('login')
+    return
+  }
+  try {
+    if (!saved.value) {
+      await addFavorite(props.business.id)
+    } else if (window.confirm(`Remove ${props.business.name} from your favorites?`)) {
+      await removeFavorite(props.business.id)
+    }
+  } catch (err) {
+    console.error('Failed to update favorites:', err)
+    window.alert('Could not update your favorites. Please try again.')
+  }
+}
 
 type Day = keyof NonNullable<TrendingBusiness['hours']>
 
@@ -35,8 +58,22 @@ onMounted(() => window.scrollTo(0, 0))
 
     <div class="detail">
       <section class="info">
-        <button type="button" class="back" @click="$emit('back')">&larr; Back to results</button>
-        <h1 class="name">{{ business.name }}</h1>
+        <button type="button" class="back" @click="$emit('back')">
+          &larr; Back to {{ nav.page === 'favorites' ? 'favorites' : 'results' }}
+        </button>
+        <div class="name-row">
+          <h1 class="name">{{ business.name }}</h1>
+          <button
+            type="button"
+            class="save"
+            :class="{ saved }"
+            :aria-pressed="saved"
+            @click="toggleSaved"
+          >
+            <i :class="saved ? 'pi pi-heart-fill' : 'pi pi-heart'" aria-hidden="true"></i>
+            {{ saved ? 'Saved' : 'Save' }}
+          </button>
+        </div>
 
         <p class="block">{{ business.description }}</p>
 
@@ -102,8 +139,37 @@ onMounted(() => window.scrollTo(0, 0))
   cursor: pointer;
 }
 
-.name {
+.name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin: 12px 0 32px;
+}
+
+.save {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.save.saved {
+  border-color: #e4572e;
+  color: #e4572e;
+}
+
+.name {
+  margin: 0;
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 700;

@@ -3,16 +3,17 @@ import { ref } from 'vue'
 import SplashPage from './components/SplashPage.vue'
 import TrendingResults from './components/TrendingResults.vue'
 import ListingDetail from './components/ListingDetail.vue'
-import type { TrendingBusiness } from './data/mockBusinesses'
+import FavoritesPage from './components/FavoritesPage.vue'
+import { closeListing, nav } from './navigation'
 
 const entered = ref(false)
-const selected = ref<TrendingBusiness | null>(null)
 </script>
 
 <template>
   <SplashPage v-if="!entered" @enter="entered = true" />
-  <ListingDetail v-else-if="selected" :business="selected" @back="selected = null" />
-  <TrendingResults v-else @select="selected = $event" />
+  <ListingDetail v-else-if="nav.selected" :key="nav.selected.id" :business="nav.selected" @back="closeListing" />
+  <FavoritesPage v-else-if="nav.page === 'favorites'" />
+  <TrendingResults v-else />
 </template>
 
 

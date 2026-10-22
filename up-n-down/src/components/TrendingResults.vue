@@ -1,28 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../firebase'
-import type { Business } from '../types'
+import { listings, loadBusinesses } from '../businesses'
+import { CATEGORIES, clearSearch, nav, openListing } from '../navigation'
 import type { TrendingBusiness } from '../data/mockBusinesses'
 import ListingCard from './ListingCard.vue'
 import BusinessMap from './BusinessMap.vue'
 import SiteHeader from './SiteHeader.vue'
 
-defineEmits<{ select: [business: TrendingBusiness] }>()
-
 const filters = ['Price', 'Cuisine', 'Distance', 'Rating', 'Open now', 'Outdoor seating']
-
-const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
-
-// Hours are stored as "11am-9pm"; the card only shows the closing time.
-function closingTime(hours: string | undefined): string {
-  if (!hours || hours.toLowerCase() === 'closed') return 'closed today'
-  return hours.split('-')[1]?.trim() ?? hours
-}
-
-const trendingBusinesses = ref<TrendingBusiness[]>([])
-const loading = ref(true)
-const loadError = ref('')
 
 // Seeded by today's date rather than Math.random(), so every visitor sees the
 // same pick all day and it doesn't change on reload. Rolls over at midnight.
@@ -34,43 +19,44 @@ function dailyIndex(length: number): number {
 }
 
 const boostOfTheDay = computed<TrendingBusiness | null>(() => {
-  const pool = trendingBusinesses.value
+  const pool = listings.items
   if (pool.length === 0) return null
   return { ...pool[dailyIndex(pool.length)], isAd: true }
+})
+
+const keyword = computed(() => nav.keyword.trim())
+const categoryLabel = computed(() => CATEGORIES.find((c) => c.value === nav.category)?.label)
+const isSearching = computed(() => keyword.value !== '' || nav.category !== null)
+
+// Every word must appear somewhere in the listing's name, description,
+// address, category or tags, so "free park" finds parks tagged free-entry.
+const results = computed(() => {
+  const words = keyword.value.toLowerCase().split(/\s+/).filter(Boolean)
+  return listings.items.filter((business) => {
+    if (nav.category && business.category !== nav.category) return false
+    const text = [business.name, business.description, business.location, business.category ?? '', ...business.tags]
+      .join(' ')
+      .toLowerCase()
+    return words.every((word) => text.includes(word))
+  })
+})
+
+const resultsTitle = computed(() => {
+  if (keyword.value && categoryLabel.value) return `"${keyword.value}" in ${categoryLabel.value}`
+  if (keyword.value) return `Results for "${keyword.value}"`
+  return categoryLabel.value ?? ''
+})
+
+const noResultsMessage = computed(() => {
+  const categoryEmpty = nav.category && !listings.items.some((b) => b.category === nav.category)
+  if (categoryEmpty) return 'No listings in this category yet.'
+  return `No results for "${keyword.value}". Check the spelling or browse by category.`
 })
 
 // The map highlights the last hovered listing and stays there on mouse-out.
 const activeBusinessId = ref<string | null>(null)
 
-onMounted(async () => {
-  try {
-    // Only verified businesses - matches the public read rule in firestore.rules
-    const snap = await getDocs(query(collection(db, 'businesses'), where('isVerified', '==', true)))
-    const today = DAYS[new Date().getDay()]
-
-    trendingBusinesses.value = snap.docs.map((doc) => {
-      const data = doc.data() as Omit<Business, 'id'>
-      return {
-        id: doc.id,
-        name: data.name,
-        description: data.description,
-        location: data.address,
-        openUntil: closingTime(data.hours?.[today]),
-        tags: data.tags,
-        imageUrl: data.imageUrl,
-        lat: data.lat,
-        lng: data.lng,
-        hours: data.hours,
-        isLocallyOwned: data.isLocallyOwned,
-      }
-    })
-  } catch (err) {
-    loadError.value = 'Could not load businesses right now.'
-    console.error('Failed to load businesses:', err)
-  } finally {
-    loading.value = false
-  }
-})
+onMounted(loadBusinesses)
 </script>
 
 <template>
@@ -79,54 +65,77 @@ onMounted(async () => {
 
     <div class="layout">
       <main class="main">
-        <p class="recommending-label">Currently Recommending:</p>
-        <div class="title-row">
-          <h1 class="page-title">Trending in Charleston</h1>
-          <div class="sort">
-            <span class="sort-label">Sort:</span>
-            <strong>Recommended</strong>
+        <template v-if="isSearching">
+          <div class="title-row">
+            <h1 class="page-title">{{ resultsTitle }}</h1>
+            <button type="button" class="filter-pill" @click="clearSearch">Clear search</button>
           </div>
-        </div>
+          <p class="section-subtitle">
+            {{ listings.loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'listing' : 'listings'}` }}
+          </p>
+          <p v-if="!listings.loading && results.length === 0" class="empty">{{ noResultsMessage }}</p>
+          <ListingCard
+            v-for="business in results"
+            :key="business.id"
+            :business="business"
+            class="clickable"
+            @click="openListing(business)"
+            @mouseenter="activeBusinessId = business.id"
+            @focusin="activeBusinessId = business.id"
+          />
+        </template>
 
-        <div class="filters">
-          <button type="button" class="filter-pill">All</button>
-          <button v-for="filter in filters" :key="filter" type="button" class="filter-pill">
-            {{ filter }}
-          </button>
-        </div>
+        <template v-else>
+          <p class="recommending-label">Currently Recommending:</p>
+          <div class="title-row">
+            <h1 class="page-title">Trending in Charleston</h1>
+            <div class="sort">
+              <span class="sort-label">Sort:</span>
+              <strong>Recommended</strong>
+            </div>
+          </div>
 
-        <h2 class="section-heading">
-          Boost of the Day!
-          <span class="info-badge" title="Sponsored placement">i</span>
-        </h2>
-        <p v-if="!boostOfTheDay" class="section-subtitle">{{ loading ? 'Loading…' : 'No boost today.' }}</p>
-        <ListingCard
-          v-else
-          :business="boostOfTheDay"
-          class="clickable"
-          @click="$emit('select', boostOfTheDay)"
-          @mouseenter="activeBusinessId = boostOfTheDay.id"
-          @focusin="activeBusinessId = boostOfTheDay.id"
-        />
+          <div class="filters">
+            <button type="button" class="filter-pill">All</button>
+            <button v-for="filter in filters" :key="filter" type="button" class="filter-pill">
+              {{ filter }}
+            </button>
+          </div>
 
-        <h2 class="section-heading">People in Charleston have been loving these!</h2>
-        <p class="section-subtitle">Based on recent visits and reviews</p>
-        <p v-if="loading" class="section-subtitle">Loading businesses…</p>
-        <p v-else-if="loadError" class="section-subtitle">{{ loadError }}</p>
-        <p v-else-if="trendingBusinesses.length === 0" class="section-subtitle">No businesses listed yet.</p>
-        <ListingCard
-          v-for="business in trendingBusinesses"
-          :key="business.id"
-          :business="business"
-          class="clickable"
-          @click="$emit('select', business)"
-          @mouseenter="activeBusinessId = business.id"
-          @focusin="activeBusinessId = business.id"
-        />
+          <h2 class="section-heading">
+            Boost of the Day!
+            <span class="info-badge" title="Sponsored placement">i</span>
+          </h2>
+          <p v-if="!boostOfTheDay" class="section-subtitle">{{ listings.loading ? 'Loading…' : 'No boost today.' }}</p>
+          <ListingCard
+            v-else
+            :business="boostOfTheDay"
+            class="clickable"
+            @click="openListing(boostOfTheDay)"
+            @mouseenter="activeBusinessId = boostOfTheDay.id"
+            @focusin="activeBusinessId = boostOfTheDay.id"
+          />
+
+          <h2 class="section-heading">People in Charleston have been loving these!</h2>
+          <p class="section-subtitle">Based on recent visits and reviews</p>
+
+          <p v-if="listings.loading" class="section-subtitle">Loading businesses…</p>
+          <p v-else-if="listings.error" class="section-subtitle">{{ listings.error }}</p>
+          <p v-else-if="listings.items.length === 0" class="section-subtitle">No businesses listed yet.</p>
+          <ListingCard
+            v-for="business in listings.items"
+            :key="business.id"
+            :business="business"
+            class="clickable"
+            @click="openListing(business)"
+            @mouseenter="activeBusinessId = business.id"
+            @focusin="activeBusinessId = business.id"
+          />
+        </template>
       </main>
 
       <aside class="map" aria-label="Map">
-        <BusinessMap :businesses="trendingBusinesses" :active-id="activeBusinessId" />
+        <BusinessMap :businesses="isSearching ? results : listings.items" :active-id="activeBusinessId" />
       </aside>
     </div>
   </div>
@@ -240,6 +249,12 @@ onMounted(async () => {
 .section-subtitle {
   margin: 4px 0 0;
   font-size: 13px;
+  color: var(--muted);
+}
+
+.empty {
+  margin: 24px 0 0;
+  font-size: 16px;
   color: var(--muted);
 }
 
