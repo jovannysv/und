@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { listings, loadBusinesses } from '../businesses'
 import { CATEGORIES, clearSearch, nav, openListing } from '../navigation'
+import { recommendations, topTagsLabel } from '../recommendations'
 import type { TrendingBusiness } from '../data/mockBusinesses'
 import ListingCard from './ListingCard.vue'
 import BusinessMap from './BusinessMap.vue'
@@ -101,6 +102,20 @@ onMounted(loadBusinesses)
               {{ filter }}
             </button>
           </div>
+
+          <template v-if="recommendations.length > 0">
+            <h2 class="section-heading">Recommended for you</h2>
+            <p class="section-subtitle">Because you saved places tagged {{ topTagsLabel }}</p>
+            <ListingCard
+              v-for="business in recommendations"
+              :key="business.id"
+              :business="business"
+              class="clickable"
+              @click="openListing(business)"
+              @mouseenter="activeBusinessId = business.id"
+              @focusin="activeBusinessId = business.id"
+            />
+          </template>
 
           <h2 class="section-heading">
             Boost of the Day!
